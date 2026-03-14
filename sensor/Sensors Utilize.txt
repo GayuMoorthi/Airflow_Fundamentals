@@ -1,0 +1,87 @@
+Practice: Better utilize Sensors
+Introduction
+Sensors are designed to wait for something to happen.
+
+By default, a sensor waits for 7 days before timing out, which can lead to an issue... Not being able to run any more tasks!
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Practice
+To show you what happens if you run too many Sensors without being careful with your resources, open .env and add the following value:
+
+AIRFLOW__CORE__PARALLELISM=3
+ 
+This environment variable overwrites the parallelism to limit the maximum number of concurrent tasks to 3. That means you can't have more than 3 tasks running in parallel.
+ 
+
+In the folder dags, create a new file fist_dag.py
+
+from airflow.decorators import dag, task
+from airflow.sensors.filesystem import FileSensor
+from datetime import datetime
+
+@dag(
+    schedule=None,
+    start_date=datetime(2023, 1, 1),
+    tags=['sensor'],
+    catchup=False
+)
+def first_dag():
+
+    wait_for_files = FileSensor.partial(
+        task_id='wait_for_files',
+        fs_conn_id='fs_default',
+    ).expand(
+        filepath=['data_1.csv', 'data_2.csv', 'data_3.csv']
+    )
+
+    @task
+    def process_file():
+        print("I processed the file!")
+
+    wait_for_files >> process_file()
+
+first_dag()
+
+
+This DAG runs three FileSensor, each waiting for data_1.csv, data_2.csv, and data_3.csv, respectively.
+
+Since the FileSensor needs a connection that contains the path where the files we're waiting for will be, we must create this connection fs_default
+
+
+Open airflow_settings.yaml and create the following connection
+
+airflow:
+  connections:
+    - conn_id: fs_default
+      conn_type: File (path) 
+      conn_host:
+      conn_schema:
+      conn_login:
+      conn_password:
+      conn_port:
+      conn_extra:
+        path: /usr/local/airflow/include/
+
+Finally, create new file second_dag.py in the folder dags
+
+from airflow.decorators import dag, task
+from airflow.sensors.filesystem import FileSensor
+from datetime import datetime
+
+@dag(
+    schedule=None,
+    start_date=datetime(2023, 1, 1),
+    tags=['sensor'],
+    catchup=False
+)
+def second_dag():
+
+    @task
+    def runme():
+        print("Hi")
+
+    runme()
+
+second_dag()
+ 
+
+Once you have everything set up, restart the Airflow instance with astro dev restart in the terminal.
